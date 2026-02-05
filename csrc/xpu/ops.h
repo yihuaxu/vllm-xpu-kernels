@@ -65,3 +65,16 @@ std::tuple<at::Tensor, at::Tensor> deepseek_scaling_rope(
     const at::Tensor& cos_sin_cache,
     int64_t rotary_dim,
     bool is_neox);
+
+at::Tensor chunk_local_cumsum_scalar_kernel(
+    const at::Tensor& g,
+    at::Tensor& out,
+    const ::std::optional<at::Tensor>& cu_seqlens,
+    const ::std::optional<at::Tensor>& chunk_indices,
+    int64_t T,
+    int64_t B,
+    int64_t H,
+    int64_t BT,
+    bool reverse,
+    bool head_first,
+    int64_t NT);
