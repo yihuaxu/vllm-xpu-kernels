@@ -66,6 +66,10 @@ TORCH_LIBRARY_EXPAND(TORCH_EXTENSION_NAME, xpu_ops) {
       "Tensor indices, int slice_offset, int slice_size, bool add_to_output) "
       "-> ()");
   xpu_ops.impl("bgmv_expand_slice", torch::kXPU, &bgmv_expand_slice);
+
+  xpu_ops.def(
+      "chunk_local_cumsum_scalar(Tensor g, int chunk_size, bool reverse=False, Tensor? cu_seqlens=None, bool head_first=False, ScalarType? output_dtype=None) -> Tensor");
+  xpu_ops.impl("chunk_local_cumsum_scalar", torch::kXPU, &chunk_local_cumsum_scalar);
 }
 
 REGISTER_EXTENSION(TORCH_EXTENSION_NAME)

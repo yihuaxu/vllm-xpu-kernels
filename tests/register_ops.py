@@ -75,6 +75,17 @@ def deepseek_scaling_rope(
                                                   offsets_opt, cos_sin_cache,
                                                   rotary_dim, is_neox_style)
 
+def chunk_local_cumsum_scalar(
+    g: torch.Tensor,
+    chunk_size: int,
+    reverse: bool = False,
+    cu_seqlens: torch.Tensor | None = None,
+    head_first: bool = False,
+    output_dtype: torch.dtype | None = torch.float,
+) -> torch.Tensor:
+    return torch.ops._xpu_C.chunk_local_cumsum_scalar(g, chunk_size, reverse,
+                                                      cu_seqlens, head_first,
+                                                      output_dtype)
 
 def reshape_and_cache(
     key: torch.Tensor,
