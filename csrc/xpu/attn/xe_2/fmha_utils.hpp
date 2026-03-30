@@ -87,8 +87,17 @@ struct chunk_policy_head256 {
 template <typename q_packed, typename head_dim, typename kv_tile>
 struct decode_policy_qpacked_head {
   static_assert(
-      cute::is_same_v<kv_tile, _64> || cute::is_same_v<kv_tile, _128>,
+      cute::is_same_v<kv_tile, _16> || cute::is_same_v<kv_tile, _64> || cute::is_same_v<kv_tile, _128>,
       "Unsupported kv_tile(page_size) for decode_policy_qpacked_head");
+};
+
+// kv_tile == _16
+template <typename q_packed, typename head_dim>
+struct decode_policy_qpacked_head<q_packed, head_dim, _16> {
+  using ShapeQK = Shape<q_packed, _16, _64>;
+  using ShapePV = Shape<q_packed, _16, _16>;
+  using ShapeOut = Shape<q_packed, head_dim>;
+  using SubgroupLayoutQK = Layout<Shape<_1, _1, _1>>;
 };
 
 // kv_tile == _64

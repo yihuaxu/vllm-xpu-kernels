@@ -72,6 +72,9 @@ inline void dispatch_by_page_size(
     CutlassQKType& cuQKType,
     const paged_decode_args_t& args) {
   switch (page_size) {
+    case 16:
+      dispatch_by_head_size<QGroup, _16>(head_case, queue, cuQKType, args);
+      break;
     case 64:
       dispatch_by_head_size<QGroup, _64>(head_case, queue, cuQKType, args);
       break;
@@ -79,7 +82,7 @@ inline void dispatch_by_page_size(
       dispatch_by_head_size<QGroup, _128>(head_case, queue, cuQKType, args);
       break;
     default:
-      TORCH_CHECK(false, "Unsupported page size for fmha");
+      TORCH_CHECK(false, "Unsupported page size for fmha: ", page_size);
   }
 }
 
