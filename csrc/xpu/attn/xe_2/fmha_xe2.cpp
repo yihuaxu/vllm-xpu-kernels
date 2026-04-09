@@ -94,12 +94,20 @@ void cutlass_chunk_prefill_impl(
     max_seqlen_q = query.size(2);
     max_seqlen_k = is_paged ? max_seqlen_q : key_cache.size(2);
   }
+
+  at::Tensor interleaved_block_table = block_table;
+
   if (is_paged) {
     num_blocks = key_cache.size(0);
     block_size = key_cache.size(1);
     num_heads_kv = key_cache.size(2);
     max_blocks_per_seq = block_table.size(1);
     total_seqlen_k = num_blocks * block_size;
+
+    if (is_interleaved_kv_cache(key_cache, value_cache)) {
+      interleaved_block_table = block_table * INTERLEAVED_KV_CACHE_SCALE_FACTOR;
+      total_seqlen_k *= INTERLEAVED_KV_CACHE_SCALE_FACTOR;
+    }
   }
 
   if (is_local) {
@@ -121,7 +129,7 @@ void cutlass_chunk_prefill_impl(
       key_cache.data_ptr(),
       value_cache.data_ptr(),
       out.data_ptr(),
-      is_paged ? block_table.data_ptr() : nullptr,
+      is_paged ? interleaved_block_table.data_ptr() : nullptr,
       cu_seqlens_q.data_ptr(),
       cu_seqlens_k.data_ptr(),
       max_seqlen_q,
