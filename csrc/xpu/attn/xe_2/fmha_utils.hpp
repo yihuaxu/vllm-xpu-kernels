@@ -2,6 +2,7 @@
 #include "torch/all.h"
 #include <cute/tensor.hpp>
 
+#define INTERLEAVED_KV_CACHE_SCALE_FACTOR 2
 #define HEAD_SIZE_LIMIT_0 64
 #define HEAD_SIZE_LIMIT_1 96
 #define HEAD_SIZE_LIMIT_2 128
@@ -45,6 +46,28 @@ inline CutlassDType aten_to_dtype(const at::Tensor& t) {
 inline CutlassQKType
 aten_to_Cutlass_qk_dtype(const at::Tensor& q, const at::Tensor& k) {
   return CutlassQKType(aten_to_dtype(q), aten_to_dtype(k));
+}
+
+inline bool is_interleaved_kv_cache(const at::Tensor& key_cache, const at::Tensor& value_cache) {
+  auto key_data_ptr = key_cache.data_ptr();
+  auto value_data_ptr = value_cache.data_ptr();
+
+  auto key_element_size_bytes = key_cache.element_size();
+  auto value_element_size_bytes = value_cache.element_size();
+  auto key_shape = key_cache.sizes();
+  auto value_shape = value_cache.sizes();
+  auto key_stride = key_cache.strides();
+  auto value_stride = value_cache.strides();
+
+  if (key_cache.dim() == value_cache.dim() &&
+      key_shape == value_shape &&
+      key_stride == value_stride &&
+      key_element_size_bytes == value_element_size_bytes &&
+      std::abs(static_cast<char*>(key_data_ptr) - static_cast<char*>(value_data_ptr)) == key_stride[0] / INTERLEAVED_KV_CACHE_SCALE_FACTOR * key_element_size_bytes) {
+    return true;
+  }
+
+  return false;
 }
 
 using namespace cute;

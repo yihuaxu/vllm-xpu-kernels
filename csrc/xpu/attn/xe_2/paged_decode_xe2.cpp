@@ -139,6 +139,10 @@ void cutlass_paged_decode_impl(
     max_seqlen_q = query.size(2);
     max_seqlen_k = key_cache.size(2);
   }
+
+  at::Tensor interleaved_block_table = block_table;
+  bool is_interleaved_kv = is_paged && is_interleaved_kv_cache(key_cache, value_cache);
+
   if (is_paged) {
     // num_blocks is used to build total_seqlen_k for shape_K in kernels
     // it is not just the meaning of used blocks for kv.
@@ -147,6 +151,11 @@ void cutlass_paged_decode_impl(
     num_heads_kv = key_cache.size(2);
     max_blocks_per_seq = block_table.size(1);
     total_seqlen_k = num_blocks * block_size;
+
+    if (is_interleaved_kv) {
+      interleaved_block_table = block_table * INTERLEAVED_KV_CACHE_SCALE_FACTOR;
+      total_seqlen_k *= INTERLEAVED_KV_CACHE_SCALE_FACTOR;
+    }
   }
 
   if (is_local) {
@@ -163,7 +172,7 @@ void cutlass_paged_decode_impl(
       temp_out.data_ptr(),
       exp_sums.data_ptr(),
       max_logits.data_ptr(),
-      block_table.data_ptr(),
+      interleaved_block_table.data_ptr(),
       cu_seqlens_q.data_ptr(),
       cu_seqlens_k.data_ptr(),
       max_seqlen_q,
@@ -189,11 +198,10 @@ void cutlass_paged_decode_impl(
       is_local,
       is_sink,
       num_kv_splits,
-      // KV cache strides
-      key_cache.stride(0),
+      is_interleaved_kv ? key_cache.stride(0) / INTERLEAVED_KV_CACHE_SCALE_FACTOR : key_cache.stride(0),
       key_cache.stride(1),
       key_cache.stride(2),
-      value_cache.stride(0),
+      is_interleaved_kv ? value_cache.stride(0) / INTERLEAVED_KV_CACHE_SCALE_FACTOR : value_cache.stride(0),
       value_cache.stride(1),
       value_cache.stride(2)};
 

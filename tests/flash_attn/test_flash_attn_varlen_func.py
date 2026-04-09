@@ -134,6 +134,13 @@ MINI_PYTEST_PARAMS = {
         "window_size": [(-1, -1), (127, 127)],
         "is_paged": [True]
     },
+    "test_varlen_with_interleaved_paged_kv": {
+        "seq_lens": [[(1, 1328), (5, 18), (129, 463)]],
+        "head_size": [64, 128],
+        "num_heads": [(8, 2)],
+        "num_blocks": [64],
+        "window_size": [(-1, -1), (127, 127)],
+    },
     "test_decode_with_paged_kv": {
         "seq_lens": [[(1, 1025), (1, 523), (1, 37)]],
         "num_heads": [(8, 2)],
@@ -323,6 +330,118 @@ def test_varlen_with_paged_kv(
     if window_size[0] != -1 or window_size[1] != -1:
         atol, rtol = 1.5e-2, 1.5e-2
     if fp8_dtype is not None:
+        atol, rtol = 1.5e-2, 1.5e-2
+    torch.testing.assert_close(output, ref_output, atol=atol, rtol=rtol), \
+        f"{torch.max(torch.abs(output - ref_output))}"
+    torch.xpu.empty_cache()
+
+
+@pytest.mark.parametrize("seq_lens", [[(1, 1328), (5, 18), (129, 463)]])
+@pytest.mark.parametrize("num_heads", NUM_HEADS)
+@pytest.mark.parametrize("head_size", HEAD_SIZES)
+@pytest.mark.parametrize("block_size", BLOCK_SIZES)
+@pytest.mark.parametrize("window_size", SLIDING_WINDOWS)
+@pytest.mark.parametrize("dtype", DTYPES, ids=format_tc)
+@pytest.mark.parametrize("num_blocks", NUM_BLOCKS)
+@pytest.mark.parametrize("is_sink", SINK)
+@pytest.mark.parametrize("is_casual", CASUAL)
+@torch.inference_mode()
+def test_varlen_with_interleaved_paged_kv(
+    seq_lens: list[tuple[int, int]],
+    num_heads: tuple[int, int],
+    head_size: int,
+    window_size: tuple[int, int],
+    dtype: torch.dtype,
+    block_size: int,
+    num_blocks: int,
+    is_sink: bool,
+    is_casual: bool,
+) -> None:
+    torch.set_default_device("xpu")
+    torch.xpu.set_device("xpu:0")
+    # # FIXME: remove skip
+    if (is_casual and seq_lens[1][0]
+            == 5) and (os.getenv("SKIP_HANG_KERNEL") is not None
+                       and os.getenv("SKIP_HANG_KERNEL") == "1"):
+        pytest.skip("skip casual for seqlen0 to avoid runtime hang on CI.")
+    if (window_size[0] != -1 or window_size[1]
+            != -1) and (os.getenv("SKIP_HANG_KERNEL") is not None
+                        and os.getenv("SKIP_HANG_KERNEL") == "1"):
+        pytest.skip("skip local attn to avoid runtime hang on CI.")
+    if block_size == 128 and num_blocks == 32768 and head_size >= 192:
+        pytest.skip("skip test cases that may run out of Memory.")
+
+    torch.manual_seed(4242)
+    num_seqs = len(seq_lens)
+    query_lens = [x[0] for x in seq_lens]
+    kv_lens = [x[1] for x in seq_lens]
+    num_query_heads = num_heads[0]
+    num_kv_heads = num_heads[1]
+    assert num_query_heads % num_kv_heads == 0
+    max_query_len = max(query_lens)
+    max_kv_len = max(kv_lens)
+    scale = head_size**-0.5
+
+    query = torch.randn(sum(query_lens),
+                        num_query_heads,
+                        head_size,
+                        dtype=dtype)
+
+    combined_kv = torch.randn(num_blocks,
+                              2 * block_size,
+                              num_kv_heads,
+                              head_size,
+                              dtype=dtype)
+    key_cache = combined_kv[:, :block_size, :, :]
+    value_cache = combined_kv[:, block_size:, :, :]
+
+    assert key_cache.shape == value_cache.shape
+    assert key_cache.stride(0) == 2 * block_size * num_kv_heads * head_size
+
+    cu_query_lens = torch.tensor([0] + query_lens,
+                                 dtype=torch.int32).cumsum(dim=0,
+                                                           dtype=torch.int32)
+    seq_k = torch.tensor(kv_lens, dtype=torch.int32)
+
+    max_num_blocks_per_seq = (max_kv_len + block_size - 1) // block_size
+    block_tables = torch.randint(0,
+                                 num_blocks,
+                                 (num_seqs, max_num_blocks_per_seq),
+                                 dtype=torch.int32)
+    sink = None
+    if is_sink:
+        sink = torch.randn(num_query_heads, dtype=dtype)
+
+    output = flash_attn_varlen_func(query,
+                                    key_cache,
+                                    value_cache,
+                                    max_query_len,
+                                    cu_query_lens,
+                                    max_kv_len,
+                                    seqused_k=seq_k,
+                                    softmax_scale=scale,
+                                    causal=is_casual,
+                                    block_table=block_tables,
+                                    window_size=window_size,
+                                    s_aux=sink)
+
+    key_cache_ref = key_cache.contiguous()
+    value_cache_ref = value_cache.contiguous()
+    ref_output = ref_paged_attn(query=query,
+                                key_cache=key_cache_ref,
+                                value_cache=value_cache_ref,
+                                query_lens=query_lens,
+                                kv_lens=kv_lens,
+                                block_tables=block_tables,
+                                scale=scale,
+                                casual=is_casual,
+                                is_paged=True,
+                                sink=sink,
+                                window_size_left=window_size[0],
+                                window_size_right=window_size[1])
+
+    atol, rtol = 1e-2, 1e-2
+    if window_size[0] != -1 or window_size[1] != -1:
         atol, rtol = 1.5e-2, 1.5e-2
     torch.testing.assert_close(output, ref_output, atol=atol, rtol=rtol), \
         f"{torch.max(torch.abs(output - ref_output))}"
