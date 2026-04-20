@@ -2,7 +2,6 @@
 #include "torch/all.h"
 #include <cute/tensor.hpp>
 
-#define INTERLEAVED_KV_CACHE_SCALE_FACTOR 2
 #define HEAD_SIZE_LIMIT_0 64
 #define HEAD_SIZE_LIMIT_1 96
 #define HEAD_SIZE_LIMIT_2 128
@@ -64,7 +63,7 @@ inline bool is_interleaved_kv_cache(const at::Tensor& key_cache, const at::Tenso
       key_shape == value_shape &&
       key_stride == value_stride &&
       key_element_size_bytes == value_element_size_bytes &&
-      std::abs(static_cast<char*>(key_data_ptr) - static_cast<char*>(value_data_ptr)) == key_stride[0] / INTERLEAVED_KV_CACHE_SCALE_FACTOR * key_element_size_bytes) {
+      std::abs(static_cast<char*>(key_data_ptr) - static_cast<char*>(value_data_ptr)) == key_stride[0] / 2 * key_element_size_bytes) {
     return true;
   }
 

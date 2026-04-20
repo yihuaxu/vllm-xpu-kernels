@@ -405,7 +405,7 @@ def test_varlen_with_interleaved_paged_kv(
     if block_size == 128 and num_blocks == 32768 and head_size >= 192:
         pytest.skip("skip test cases that may run out of Memory.")
 
-    torch.manual_seed(4242)
+    torch.manual_seed(42)
     num_seqs = len(seq_lens)
     query_lens = [x[0] for x in seq_lens]
     kv_lens = [x[1] for x in seq_lens]

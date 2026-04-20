@@ -95,7 +95,7 @@ void cutlass_chunk_prefill_impl(
     max_seqlen_k = is_paged ? max_seqlen_q : key_cache.size(2);
   }
 
-  at::Tensor interleaved_block_table = block_table;
+  bool is_interleaved_kv = false;
 
   if (is_paged) {
     num_blocks = key_cache.size(0);
@@ -104,10 +104,7 @@ void cutlass_chunk_prefill_impl(
     max_blocks_per_seq = block_table.size(1);
     total_seqlen_k = num_blocks * block_size;
 
-    if (is_interleaved_kv_cache(key_cache, value_cache)) {
-      interleaved_block_table = block_table * INTERLEAVED_KV_CACHE_SCALE_FACTOR;
-      total_seqlen_k *= INTERLEAVED_KV_CACHE_SCALE_FACTOR;
-    }
+    is_interleaved_kv = is_interleaved_kv_cache(key_cache, value_cache);
   }
 
   if (is_local) {
@@ -129,13 +126,13 @@ void cutlass_chunk_prefill_impl(
       key_cache.data_ptr(),
       value_cache.data_ptr(),
       out.data_ptr(),
-      is_paged ? interleaved_block_table.data_ptr() : nullptr,
+      is_paged ? block_table.data_ptr() : nullptr,
       cu_seqlens_q.data_ptr(),
       cu_seqlens_k.data_ptr(),
       max_seqlen_q,
       max_seqlen_k,
       total_seqlen_q,
-      total_seqlen_k,
+      is_interleaved_kv ? total_seqlen_k * 2 : total_seqlen_k,
       is_fp8_kv ? k_scale.value().data_ptr() : nullptr,
       is_fp8_kv ? v_scale.value().data_ptr() : nullptr,
       static_cast<float>(sm_scale),
@@ -152,7 +149,8 @@ void cutlass_chunk_prefill_impl(
       is_paged,   // paged
       is_causal,
       is_local,
-      is_sink};
+      is_sink,
+      is_interleaved_kv};
 
   // Extract Q, K, V, O strides from tensors
   if (is_varlen) {

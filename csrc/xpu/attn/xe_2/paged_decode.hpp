@@ -82,6 +82,7 @@ struct paged_decode_args_t {
   bool is_causal = false;
   bool is_local = false;
   bool is_sink = false;
+  bool is_interleaved_kv_cache = false;
   int num_kv_splits = 1;
   // KV cache strides [num_blocks, block_size, num_heads_kv, head_size]
   int64_t k_stride_page = 0;
@@ -252,7 +253,8 @@ struct DecodeKernelLauncher {
          args.max_blocks_per_seq,
          args.total_seqlen_k,
          args.window_size_left,
-         args.window_size_right},
+         args.window_size_right,
+         args.is_interleaved_kv_cache},
         {},
         hw_info,
         args.num_kv_splits};

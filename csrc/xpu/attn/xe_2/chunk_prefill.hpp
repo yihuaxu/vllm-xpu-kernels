@@ -52,6 +52,7 @@ struct chunk_prefill_args_t {
   bool is_causal = false;
   bool is_local = false;
   bool is_sink = false;
+  bool is_interleaved_kv_cache = false;
   // Q/O strides in CUTLASS order: (seq, head_size=1, heads, batch)
   int q_stride_seq = 0;
   int q_stride_heads = 0;
@@ -174,7 +175,8 @@ struct KernelLauncher {
          args.max_blocks_per_seq,
          args.total_seqlen_k,
          args.window_size_left,
-         args.window_size_right},
+         args.window_size_right,
+         args.is_interleaved_kv_cache},
         {},
         hw_info};
 
