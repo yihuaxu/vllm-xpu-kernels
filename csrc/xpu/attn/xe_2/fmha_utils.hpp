@@ -48,22 +48,17 @@ aten_to_Cutlass_qk_dtype(const at::Tensor& q, const at::Tensor& k) {
   return CutlassQKType(aten_to_dtype(q), aten_to_dtype(k));
 }
 
-inline bool is_interleaved_kv_cache(const at::Tensor& key_cache, const at::Tensor& value_cache) {
-  auto key_data_ptr = key_cache.data_ptr();
-  auto value_data_ptr = value_cache.data_ptr();
-
-  auto key_element_size_bytes = key_cache.element_size();
-  auto value_element_size_bytes = value_cache.element_size();
-  auto key_shape = key_cache.sizes();
-  auto value_shape = value_cache.sizes();
-  auto key_stride = key_cache.strides();
+inline bool is_interleaved_kv_cache(
+    const at::Tensor& key_cache, const at::Tensor& value_cache) {
   auto value_stride = value_cache.strides();
 
   if (key_cache.dim() == value_cache.dim() &&
-      key_shape == value_shape &&
-      key_stride == value_stride &&
-      key_element_size_bytes == value_element_size_bytes &&
-      std::abs(static_cast<char*>(key_data_ptr) - static_cast<char*>(value_data_ptr)) == key_stride[0] / 2 * key_element_size_bytes) {
+      key_cache.sizes() == value_cache.sizes() &&
+      key_cache.strides() == value_stride &&
+      key_cache.element_size() == value_cache.element_size() &&
+      key_cache.storage().data_ptr() == value_cache.storage().data_ptr() &&
+      key_cache.storage_offset() == 0 &&
+      value_cache.storage_offset() == value_stride[0] / 2) {
     return true;
   }
 
