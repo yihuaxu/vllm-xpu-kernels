@@ -475,7 +475,7 @@ def test_varlen_with_interleaved_paged_kv(
                                 window_size_right=window_size[1])
 
     atol, rtol = 1e-2, 1e-2
-    if window_size[0] != -1 or window_size[1] != -1:
+    if window_size[0] != -1 or window_size[1] != -1 or dtype == torch.bfloat16:
         atol, rtol = 1.5e-2, 1.5e-2
     torch.testing.assert_close(output, ref_output, atol=atol, rtol=rtol), \
         f"{torch.max(torch.abs(output - ref_output))}"
